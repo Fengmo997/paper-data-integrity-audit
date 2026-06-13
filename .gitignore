@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+.Rhistory
+.RData
+.Rproj.user/
+audit_results/
+source_data_scan/
+*.xlsx
+*.xls
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.tif
+*.tiff
