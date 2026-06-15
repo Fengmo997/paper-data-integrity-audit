@@ -1,6 +1,6 @@
 ---
 name: paper-data-integrity-audit
-description: Use when auditing scientific paper raw data, supplementary tables, figure source data, decimal precision, last-digit distribution, numeric distribution, pseudo-random or reconstructed values, arithmetic-progressed pseudo-values, duplicate numeric sequences, derived-panel recalculation, n consistency, statistical recalculation, figure reproducibility, image reuse, and cautious evidence-based risk grading.
+description: Use when auditing scientific paper raw data, supplementary tables, figure source data, decimal precision, last-digit distribution, numeric distribution, pseudo-random or reconstructed values, arithmetic-progressed pseudo-values, constant-sum or mirror-pair constraints, duplicate numeric sequences, derived-panel recalculation, n consistency, statistical recalculation, figure reproducibility, image reuse, and cautious evidence-based risk grading.
 ---
 
 # Paper Data Integrity Audit
@@ -37,7 +37,8 @@ INSUFFICIENT DATA rather than inferring beyond the evidence.
 4. Audit distributions. For each group compute n, mean, median, SD, SEM, CV,
    min, max, IQR, skewness, kurtosis, duplicate counts, decimal-place
    distribution, last-digit distribution, first-digit distribution, digit
-   entropy, terminal 0/5 enrichment, and pseudo-randomness screens. Use
+   entropy, terminal 0/5 enrichment, adjacent-pair sum constraints, row-total
+   constraints, and pseudo-randomness screens. Use
    `scripts/distribution_audit.R` for tidy CSV tables; read
    `resources/distribution_rules.md` before grading.
 5. Recalculate derived panels from their declared parent data. Examples: AUC
@@ -127,6 +128,8 @@ Primary xlsx screening outputs:
   decimal places, digit distributions, arithmetic checks, and raw values.
 - `arithmetic_progression_blocks.csv`: group blocks with near-exact arithmetic
   progressions.
+- `constant_pair_sum_blocks.csv`: group blocks where many adjacent replicate
+  pairs have the same sum and many rows have totals implied by that pair sum.
 - `duplicate_numeric_sequences.csv`: repeated long numeric sequences across
   blocks.
 
@@ -137,6 +140,12 @@ methods or source-data structure:
 
 - Values for biological replicates form exact or near-exact arithmetic
   progressions centered on the mean.
+- Adjacent biological-replicate pairs repeatedly sum to an exact or near-exact
+  constant, such as `x1+x2=2`, `x3+x4=2`, and `x5+x6=2` across many rows, or a
+  control group repeatedly has row totals forced to the nominal n. Treat this as
+  HIGH-RISK when no documented pairwise normalization, shared calibrator,
+  percentage-complement, technical-duplicate, or compositional constraint
+  explains it.
 - Replicate values show repeated pseudo-random structure, such as unusually
   patterned last digits, low digit entropy, excessive terminal 0/5 values,
   monotonic row order, or summary-derived jitter, across multiple independent

@@ -60,6 +60,8 @@ For each recognizable group block, output:
 - decimal-place and last-digit distributions
 - first-digit distribution, last-digit entropy, last-digit uniformity screen,
   and terminal 0/5 fraction
+- adjacent-pair sum targets, matching-pair counts, matching fractions, and
+  row-total matches for constant-sum reconstruction screening
 - raw values
 - issue flags
 
@@ -107,6 +109,12 @@ a direct accusation. Check for:
 - monotonic replicate order within independent biological groups
 - values generated as `mean +/- k * step`
 - symmetric values centered on the reported mean
+- repeated adjacent-pair sums such as `x1+x2=2`, `x3+x4=2`, and `x5+x6=2`
+  across nominally independent rows; this is stronger than ordinary control
+  mean normalization because it constrains pair-level values, not only group
+  totals
+- group totals repeatedly forced to the nominal n after normalization,
+  especially when paired sums or mirror constraints are also present
 - completely identical long-decimal values or highly similar long-decimal tails
   across nominally independent biological replicates, conditions, samples, or
   panels; exact repeated values with 6 or more decimal places, or
@@ -141,6 +149,36 @@ Interpretation:
   perfect arithmetic progression.
 - If arithmetic-progressed values preserve the group mean but differ from raw
   parent-panel values, grade as HIGH-RISK.
+
+## 7b. Constant-Sum And Mirror-Reconstruction Audit
+
+Detect row-wise constraints that preserve means while changing individual
+replicate values:
+
+- adjacent-pair sums: `x1+x2`, `x3+x4`, `x5+x6`
+- edge-mirror sums: `x1+xn`, `x2+x(n-1)`
+- sample-ID matched sums when labels imply pairing
+- row totals exactly equal to n for normalized controls
+
+High-risk pattern:
+
+- at least 12 checked pairs across at least 4 rows
+- one pair-sum target accounts for at least 80% of checked pairs and at least
+  10 pairs
+- at least 80% of rows have totals implied by that same pair-sum target
+- the panel labels the values as independent biological observations or
+  replicate source values
+- no documented pairwise normalization, calibrator, technical-duplicate,
+  percentage-complement, or compositional rule explains the constraint
+
+Interpretation:
+
+- Control normalization may force the group mean to 1, but it does not justify
+  repeated adjacent pairs summing exactly to 2.
+- Percentage complements and compositional parts can legitimately sum to 100 or
+  1 when they are parts of the same whole.
+- Report exact source cells, the pair-sum target, matching-pair count, total
+  checked pairs, and raw file in every retained finding.
 
 ## 8. Duplicate Numeric Sequence Audit
 

@@ -3,8 +3,9 @@
 
 Outputs workbook/sheet summaries, numeric-cell audits, digital-distribution
 summaries, recognizable group-block summaries, near-exact arithmetic
-progressions, and duplicate numeric sequences. The parser reads xlsx XML
-directly and does not require pandas or openpyxl.
+progressions, constant adjacent-pair sum patterns, and duplicate numeric
+sequences. The parser reads xlsx XML directly and does not require pandas or
+openpyxl.
 """
 
 from __future__ import annotations
@@ -57,11 +58,23 @@ def col_to_num(col: str) -> int:
     return value
 
 
+def num_to_col(num: int) -> str:
+    letters = ""
+    while num:
+        num, rem = divmod(num - 1, 26)
+        letters = chr(ord("A") + rem) + letters
+    return letters
+
+
 def ref_to_rc(ref: str) -> tuple[int, int]:
     match = re.match(r"([A-Z]+)(\d+)", ref)
     if not match:
         raise ValueError(f"Invalid cell reference: {ref}")
     return int(match.group(2)), col_to_num(match.group(1))
+
+
+def rc_to_ref(row: int, col: int) -> str:
+    return f"{num_to_col(col)}{row}"
 
 
 def read_shared_strings(zf: zipfile.ZipFile) -> list[str]:
@@ -339,7 +352,97 @@ def arithmetic_progression(values: list[float], tolerance: float) -> tuple[bool,
     return max_dev <= tolerance, step, max_dev
 
 
-def extract_group_blocks(workbook: str, sheet: str, matrix: list[list[str]], ap_tolerance: float) -> list[dict[str, Any]]:
+def modal_cluster(values: list[float], tolerance: float) -> tuple[float, int]:
+    if not values:
+        return math.nan, 0
+    ordered = sorted(values)
+    best_mean = ordered[0]
+    best_count = 1
+    current = [ordered[0]]
+    for value in ordered[1:]:
+        center = statistics.fmean(current)
+        if abs(value - center) <= tolerance:
+            current.append(value)
+            continue
+        if len(current) > best_count:
+            best_mean = statistics.fmean(current)
+            best_count = len(current)
+        current = [value]
+    if len(current) > best_count:
+        best_mean = statistics.fmean(current)
+        best_count = len(current)
+    return best_mean, best_count
+
+
+def adjacent_pair_sum_pattern(
+    matrix: list[list[str]],
+    data_rows: list[int],
+    group_start: int,
+    group_end: int,
+    tolerance: float,
+) -> dict[str, Any]:
+    pair_sums: list[float] = []
+    row_pairs: list[tuple[int, int, float]] = []
+    examples: list[str] = []
+    rows_with_pairs = 0
+    for rr in data_rows:
+        row_values: list[tuple[int, float, str]] = []
+        for cc in range(group_start, group_end + 1):
+            raw = cell(matrix, rr, cc)
+            if is_number(raw):
+                row_values.append((cc, to_float(raw), raw))
+        pairs_in_row = len(row_values) // 2
+        if pairs_in_row < 2:
+            continue
+        rows_with_pairs += 1
+        for idx in range(pairs_in_row):
+            c1, v1, raw1 = row_values[2 * idx]
+            c2, v2, raw2 = row_values[2 * idx + 1]
+            pair_sum = v1 + v2
+            pair_sums.append(pair_sum)
+            row_pairs.append((rr, pairs_in_row, sum(v for _, v, _ in row_values[: pairs_in_row * 2])))
+            if len(examples) < 6:
+                examples.append(
+                    f"{rc_to_ref(rr + 1, c1 + 1)}+{rc_to_ref(rr + 1, c2 + 1)}="
+                    f"{raw1}+{raw2}={fmt(pair_sum)}"
+                )
+    mode_sum, mode_count = modal_cluster(pair_sums, tolerance)
+    total_pairs = len(pair_sums)
+    match_fraction = mode_count / total_pairs if total_pairs else math.nan
+    row_total_matches = 0
+    checked_rows: set[int] = set()
+    for rr, pairs_in_row, row_total in row_pairs:
+        if rr in checked_rows:
+            continue
+        checked_rows.add(rr)
+        expected_total = mode_sum * pairs_in_row
+        if math.isfinite(mode_sum) and abs(row_total - expected_total) <= tolerance * max(1, pairs_in_row):
+            row_total_matches += 1
+    candidate = (
+        total_pairs >= 12
+        and rows_with_pairs >= 4
+        and mode_count >= max(10, math.ceil(0.80 * total_pairs))
+        and row_total_matches >= max(4, math.ceil(0.80 * rows_with_pairs))
+    )
+    return {
+        "pair_sum_target": fmt(mode_sum),
+        "pair_sum_matching_pairs": mode_count,
+        "pair_sum_total_pairs": total_pairs,
+        "pair_sum_matching_fraction": fmt(match_fraction),
+        "pair_sum_rows_with_pairs": rows_with_pairs,
+        "pair_sum_rows_matching_total": row_total_matches,
+        "pair_sum_examples": ";".join(examples),
+        "constant_adjacent_pair_sum_candidate": candidate,
+    }
+
+
+def extract_group_blocks(
+    workbook: str,
+    sheet: str,
+    matrix: list[list[str]],
+    ap_tolerance: float,
+    pair_sum_tolerance: float,
+) -> list[dict[str, Any]]:
     blocks: list[dict[str, Any]] = []
     seen: set[tuple[int, int, int]] = set()
     for r in range(max(0, len(matrix) - 1)):
@@ -400,6 +503,9 @@ def extract_group_blocks(workbook: str, sheet: str, matrix: list[list[str]], ap_
                 is_ap, step, max_dev = arithmetic_progression(values, ap_tolerance)
                 if is_ap:
                     flags.append("near_exact_arithmetic_progression")
+                pair_pattern = adjacent_pair_sum_pattern(matrix, data_rows, g_start, g_end, pair_sum_tolerance)
+                if pair_pattern["constant_adjacent_pair_sum_candidate"]:
+                    flags.append("constant_adjacent_pair_sum_pattern")
                 if "last_digit_concentration" in digital["issue_flags"]:
                     flags.append("last_digit_concentration")
                 if "terminal_0_5_enrichment" in digital["issue_flags"]:
@@ -439,6 +545,13 @@ def extract_group_blocks(workbook: str, sheet: str, matrix: list[list[str]], ap_
                         "order_of_magnitude_span": digital["order_of_magnitude_span"],
                         "arithmetic_step": fmt(step),
                         "arithmetic_max_step_deviation": fmt(max_dev),
+                        "pair_sum_target": pair_pattern["pair_sum_target"],
+                        "pair_sum_matching_pairs": pair_pattern["pair_sum_matching_pairs"],
+                        "pair_sum_total_pairs": pair_pattern["pair_sum_total_pairs"],
+                        "pair_sum_matching_fraction": pair_pattern["pair_sum_matching_fraction"],
+                        "pair_sum_rows_with_pairs": pair_pattern["pair_sum_rows_with_pairs"],
+                        "pair_sum_rows_matching_total": pair_pattern["pair_sum_rows_matching_total"],
+                        "pair_sum_examples": pair_pattern["pair_sum_examples"],
                         "values": ";".join(raw),
                         "issue_flags": ";".join(flags),
                     }
@@ -477,7 +590,13 @@ def duplicate_sequences(blocks: list[dict[str, Any]], min_len: int) -> list[dict
     return rows
 
 
-def audit_workbooks(inputs: list[Path], out: Path, ap_tolerance: float, min_sequence_len: int) -> None:
+def audit_workbooks(
+    inputs: list[Path],
+    out: Path,
+    ap_tolerance: float,
+    pair_sum_tolerance: float,
+    min_sequence_len: int,
+) -> None:
     sheet_rows: list[dict[str, Any]] = []
     label_rows: list[dict[str, Any]] = []
     numeric_rows: list[dict[str, Any]] = []
@@ -542,7 +661,7 @@ def audit_workbooks(inputs: list[Path], out: Path, ap_tolerance: float, min_sequ
                 digital_rows.append(digital_distribution_summary(workbook.name, sheet, "sheet", "", "", sheet_raw, sheet_values))
             with (sheet_dir / f"{safe_name(workbook.stem)}__{safe_name(sheet)}.csv").open("w", newline="", encoding="utf-8") as handle:
                 csv.writer(handle).writerows(matrix)
-            blocks = extract_group_blocks(workbook.name, sheet, matrix, ap_tolerance)
+            blocks = extract_group_blocks(workbook.name, sheet, matrix, ap_tolerance, pair_sum_tolerance)
             all_blocks.extend(blocks)
             for block in blocks:
                 raw = block["values"].split(";")
@@ -564,6 +683,7 @@ def audit_workbooks(inputs: list[Path], out: Path, ap_tolerance: float, min_sequ
     csv_write(out / "digital_distribution_summary.csv", digital_rows)
     csv_write(out / "group_block_summary.csv", all_blocks)
     csv_write(out / "arithmetic_progression_blocks.csv", [b for b in all_blocks if "near_exact_arithmetic_progression" in b["issue_flags"]])
+    csv_write(out / "constant_pair_sum_blocks.csv", [b for b in all_blocks if "constant_adjacent_pair_sum_pattern" in b["issue_flags"]])
     csv_write(out / "duplicate_numeric_sequences.csv", duplicate_sequences(all_blocks, min_sequence_len))
     print(f"workbooks={len(inputs)}")
     print(f"sheets={len(sheet_rows)}")
@@ -571,6 +691,7 @@ def audit_workbooks(inputs: list[Path], out: Path, ap_tolerance: float, min_sequ
     print(f"digital_distribution_rows={len(digital_rows)}")
     print(f"group_blocks={len(all_blocks)}")
     print(f"arithmetic_progression_blocks={sum('near_exact_arithmetic_progression' in b['issue_flags'] for b in all_blocks)}")
+    print(f"constant_pair_sum_blocks={sum('constant_adjacent_pair_sum_pattern' in b['issue_flags'] for b in all_blocks)}")
     print(f"out={out}")
 
 
@@ -579,6 +700,12 @@ def main() -> int:
     parser.add_argument("input", help="xlsx file or directory containing xlsx files")
     parser.add_argument("--out", default="source_data_workbook_audit", help="Output directory")
     parser.add_argument("--ap-tolerance", type=float, default=0.001, help="Maximum step deviation for arithmetic progression flag")
+    parser.add_argument(
+        "--pair-sum-tolerance",
+        type=float,
+        default=1e-9,
+        help="Maximum deviation for constant adjacent-pair sum clustering",
+    )
     parser.add_argument("--min-sequence-len", type=int, default=5, help="Minimum sequence length for duplicate-sequence hashing")
     args = parser.parse_args()
 
@@ -589,7 +716,7 @@ def main() -> int:
         inputs = [src]
     if not inputs:
         raise SystemExit("No xlsx files found.")
-    audit_workbooks(inputs, Path(args.out), args.ap_tolerance, args.min_sequence_len)
+    audit_workbooks(inputs, Path(args.out), args.ap_tolerance, args.pair_sum_tolerance, args.min_sequence_len)
     return 0
 
 

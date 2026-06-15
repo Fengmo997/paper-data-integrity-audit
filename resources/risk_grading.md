@@ -32,6 +32,10 @@ Use one overall verdict and issue-level risk labels.
 - Multiple panels reuse the same data sequence without explanation.
 - Biological replicate values form exact or near-exact arithmetic progressions
   suggesting reconstruction from summary statistics.
+- Biological replicate values repeatedly satisfy adjacent-pair or mirror-pair
+  constant-sum constraints, such as many pairs summing to 2 in normalized
+  control data, without a documented pairwise normalization, calibrator,
+  technical-duplicate, percentage-complement, or compositional rule.
 - Nominally independent biological replicates, conditions, samples, or panels
   contain completely identical long-decimal values or highly similar
   long-decimal tails. Exact repeated values with 6 or more decimal places, or

@@ -1,4 +1,4 @@
 interface:
   display_name: "Paper Data Integrity Audit"
-  short_description: "Audit raw source data, digit distributions, statistics, figures, and image evidence."
-  default_prompt: "Use $paper-data-integrity-audit to audit raw source data, last-digit and numeric distributions, pseudo-randomness, derived panels, statistics, figures, and evidence consistency."
+  short_description: "Audit raw source data, digit distributions, reconstructed-value patterns, statistics, figures, and images."
+  default_prompt: "Use $paper-data-integrity-audit to audit raw source data, last-digit and numeric distributions, pseudo-randomness, constant-sum or mirror-pair constraints, derived panels, statistics, figures, and evidence consistency."
