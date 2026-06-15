@@ -11,7 +11,7 @@ Use decimal precision as a screening signal, not as proof of misconduct.
 - Ordinal pathology scores should be integers or values from the stated scoring
   rubric; group means must be compatible with n and the score grid.
 - qPCR Ct values commonly have limited instrument precision; many raw Ct columns
-  with 6 or more decimal places require explanation.
+  with 3 or more decimal places require explanation.
 - Mixed decimal precision in the same raw-data column can be valid after manual
   entry, but it should be flagged when no measurement-method reason is given.
 - Repeated decimal tails across many unrelated values are higher-risk than one
@@ -30,8 +30,8 @@ Use decimal precision as a screening signal, not as proof of misconduct.
 - Integer or ordinal raw measurements are reported with arbitrary long decimals.
 - Completely identical long-decimal values, or highly similar long-decimal
   tails, appear across nominally independent biological replicates, conditions,
-  samples, or panels. Exact repeated values with 6 or more decimal places, or
-  repeated/similar decimal tails of 6 or more digits, should be graded
+  samples, or panels. Exact repeated values with 3 or more decimal places, or
+  repeated/similar decimal tails of 3 or more digits, should be graded
   HIGH-RISK unless the source explicitly documents a shared calibrator,
   detection floor, technical duplicate, or rounding/export rule.
 - Multiple unrelated panels share the same decimal sequence or repeated tails.

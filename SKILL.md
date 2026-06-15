@@ -131,7 +131,12 @@ Primary xlsx screening outputs:
 - `constant_pair_sum_blocks.csv`: group blocks where many adjacent replicate
   pairs have the same sum and many rows have totals implied by that pair sum.
 - `duplicate_numeric_sequences.csv`: repeated long numeric sequences across
-  blocks.
+  blocks, with default minimum sequence length `3`.
+- `short_duplicate_numeric_sequences.csv`: same-panel adjacent or same-condition
+  short vector matches, cross-panel same-condition matches, and local runs where
+  at least `3` consecutive numeric positions are identical. Review the
+  `independent_cytokine_or_condition_hint` and `shared_calculation_source_hint`
+  fields before assigning a final risk grade.
 
 ## Raw Source Data Red Flags
 
@@ -152,10 +157,17 @@ methods or source-data structure:
   groups.
 - Nominally independent biological replicates, conditions, samples, or panels
   contain completely identical long-decimal values or highly similar
-  long-decimal tails. Treat exact repeated values with 6 or more decimal places,
-  or repeated/similar decimal tails of 6 or more digits across independent
+  long-decimal tails. Treat exact repeated values with 3 or more decimal places,
+  or repeated/similar decimal tails of 3 or more digits across independent
   observations, as HIGH-RISK unless the source explicitly documents a shared
   calibrator, detection floor, technical duplicate, or rounding rule.
+- Same-panel adjacent condition columns, same-panel same-condition columns, or
+  cross-panel same-condition columns contain identical short vectors of length
+  `3` or more, or contain a local run of at least `3` consecutive identical
+  numeric positions. Grade by context: HIGH-RISK when the matched values are
+  nominally independent cytokines, conditions, samples, or panels and no shared
+  calculation source, technical duplicate, calibrator, or rounding/export rule
+  is documented; WARN when a shared source is plausible but not explicit.
 - A derivative panel, such as AUC or percentage, cannot be recalculated from the
   parent raw panel even though the legend says it is calculated from that panel.
 - Different panels or conditions share an exact long numeric sequence.

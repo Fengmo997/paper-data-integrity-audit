@@ -36,7 +36,7 @@ Flag missing raw data as INSUFFICIENT DATA.
 For each numeric table, calculate:
 
 - decimal-place distribution
-- long-decimal counts, especially 8 or more decimal places
+- long-decimal counts, especially 3 or more decimal places
 - last-digit distribution
 - first-digit distribution
 - digit entropy and last-digit concentration
@@ -117,9 +117,13 @@ a direct accusation. Check for:
   especially when paired sums or mirror constraints are also present
 - completely identical long-decimal values or highly similar long-decimal tails
   across nominally independent biological replicates, conditions, samples, or
-  panels; exact repeated values with 6 or more decimal places, or
-  repeated/similar decimal tails of 6 or more digits, are HIGH-RISK unless a
+  panels; exact repeated values with 3 or more decimal places, or
+  repeated/similar decimal tails of 3 or more digits, are HIGH-RISK unless a
   documented technical explanation is present
+- identical short numeric vectors in same-panel adjacent condition columns,
+  same-panel same-condition columns, or cross-panel same-condition columns;
+  also check for local runs where at least 3 consecutive positions are identical
+  even when the full column is not identical
 - repeated decimal tails or copied terminal-digit patterns
 - excessive avoidance or enrichment of round terminal digits
 - identical sample ranking across unrelated assays
@@ -182,9 +186,23 @@ Interpretation:
 
 ## 8. Duplicate Numeric Sequence Audit
 
-Hash full numeric sequences by panel and group after standardizing values.
-Escalate when long sequences are exactly reused across nominally different
-conditions, samples, or panels.
+Hash full numeric sequences by panel and group after standardizing values. Use
+a default minimum sequence length of `3`. Escalate when sequences are exactly
+reused across nominally different conditions, samples, or panels.
+
+Also screen short column/vector reuse:
+
+- same-panel adjacent condition columns
+- same-panel same-condition columns across different analytes, cytokines, genes,
+  or readouts
+- cross-panel same-condition columns
+- local consecutive overlap where at least `3` numeric positions match in order
+
+Grade by context. Treat the match as HIGH-RISK when the repeated values are
+nominally independent cytokines, conditions, samples, or panels and the source
+does not document a shared calculation source, calibrator, technical duplicate,
+or rounding/export rule. Treat as WARN when shared controls or technical reuse
+are plausible but not explicitly documented.
 
 High-risk examples:
 

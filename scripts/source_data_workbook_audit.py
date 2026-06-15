@@ -18,6 +18,7 @@ import re
 import statistics
 import zipfile
 from collections import Counter, defaultdict
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree as ET
@@ -29,6 +30,8 @@ REL_NS = "{http://schemas.openxmlformats.org/package/2006/relationships}"
 FIG_RE = re.compile(r"(?:^|\b)(?:fig|sfig|supplementary|extended|extneded)\.?\s*[\w .,\-]*", re.I)
 AXIS_RE = re.compile(r"^(?:time|day|week|w|h|0w|1w|2w|4w|6w|8w|12w|\d+\s*[whd]?|wavelength|retention)", re.I)
 BENFORD = {str(i): math.log10(1 + 1 / i) for i in range(1, 10)}
+LONG_DECIMAL_PLACES = 3
+SHORT_SEQUENCE_LEN = 3
 
 
 def csv_write(path: Path, rows: list[dict[str, Any]], fieldnames: list[str] | None = None) -> None:
@@ -164,9 +167,13 @@ def to_float(value: str) -> float:
 
 def decimal_places(value: str) -> int:
     text = str(value).strip().replace(",", "").rstrip("%")
-    if "e" in text.lower():
+    if "." in text and "e" not in text.lower():
+        return len(text.split(".", 1)[1])
+    try:
+        number = Decimal(text)
+    except InvalidOperation:
         return 0
-    return len(text.split(".", 1)[1]) if "." in text else 0
+    return max(0, -number.as_tuple().exponent)
 
 
 def last_digit(value: str) -> str:
@@ -236,6 +243,42 @@ def nearest_panel_label(matrix: list[list[str]], row: int, start: int, end: int)
 
 def fmt(value: float) -> str:
     return f"{value:.10g}" if math.isfinite(value) else ""
+
+
+def value_key(value: str) -> str:
+    if not is_number(value):
+        return str(value).strip()
+    number = to_float(value)
+    return "0" if number == 0 else f"{number:.15g}"
+
+
+def normalize_label(text: str) -> str:
+    return re.sub(r"\s+", " ", str(text).replace("\xa0", " ").strip().lower())
+
+
+def cell_range(data_rows: list[int], col_start: int, col_end: int) -> str:
+    if not data_rows:
+        return ""
+    start = rc_to_ref(data_rows[0] + 1, col_start + 1)
+    end = rc_to_ref(data_rows[-1] + 1, col_end + 1)
+    return start if start == end else f"{start}:{end}"
+
+
+def inherited_label(matrix: list[list[str]], row: int, col: int, segment_start: int) -> str:
+    for cc in range(col, segment_start - 1, -1):
+        value = cell(matrix, row, cc).strip()
+        if textish(value) and not FIG_RE.search(value):
+            return value
+    return ""
+
+
+def context_labels(matrix: list[list[str]], header_row: int, group_col: int, segment_start: int) -> str:
+    labels: list[str] = []
+    for rr in range(max(0, header_row - 4), header_row):
+        label = inherited_label(matrix, rr, group_col, segment_start)
+        if label and label not in labels:
+            labels.append(label)
+    return " | ".join(labels)
 
 
 def count_string(items: list[str] | list[int]) -> str:
@@ -479,12 +522,14 @@ def extract_group_blocks(
                 g_end = groups[i + 1][0] - 1 if i + 1 < len(groups) else end
                 raw: list[str] = []
                 values: list[float] = []
+                value_cells: list[str] = []
                 for rr in data_rows:
                     for cc in range(g_start, g_end + 1):
                         value = cell(matrix, rr, cc)
                         if is_number(value):
                             raw.append(value)
                             values.append(to_float(value))
+                            value_cells.append(rc_to_ref(rr + 1, cc + 1))
                 if len(values) < 2:
                     continue
                 flags: list[str] = []
@@ -494,8 +539,8 @@ def extract_group_blocks(
                 duplicate_count = len(raw) - len(set(raw))
                 if len(values) < 5:
                     flags.append("small_n_limited_distribution_interpretation")
-                if any(p >= 8 for p in places):
-                    flags.append("long_decimal_precision_ge_8")
+                if any(p >= LONG_DECIMAL_PLACES for p in places):
+                    flags.append(f"long_decimal_precision_ge_{LONG_DECIMAL_PLACES}")
                 if len(set(values)) == 1:
                     flags.append("zero_variance")
                 if len(values) >= 5 and duplicate_count / len(values) >= 0.4:
@@ -525,6 +570,10 @@ def extract_group_blocks(
                         "data_rows": f"{data_rows[0] + 1}-{data_rows[-1] + 1}",
                         "col_start": start + 1,
                         "col_end": end + 1,
+                        "group_col_start": g_start + 1,
+                        "group_col_end": g_end + 1,
+                        "group_cell_range": cell_range(data_rows, g_start, g_end),
+                        "context_labels": context_labels(matrix, r, g_start, start),
                         "group": label,
                         "n": len(values),
                         "mean": fmt(mean),
@@ -553,6 +602,7 @@ def extract_group_blocks(
                         "pair_sum_rows_matching_total": pair_pattern["pair_sum_rows_matching_total"],
                         "pair_sum_examples": pair_pattern["pair_sum_examples"],
                         "values": ";".join(raw),
+                        "value_cells": ";".join(value_cells),
                         "issue_flags": ";".join(flags),
                     }
                 )
@@ -567,7 +617,7 @@ def duplicate_sequences(blocks: list[dict[str, Any]], min_len: int) -> list[dict
             continue
         if AXIS_RE.match(str(block["group"])):
             continue
-        signature = "|".join(values)
+        signature = "|".join(value_key(v) for v in values)
         by_hash[hashlib.sha256(signature.encode()).hexdigest()].append(block)
     rows: list[dict[str, Any]] = []
     for digest, hits in by_hash.items():
@@ -590,12 +640,171 @@ def duplicate_sequences(blocks: list[dict[str, Any]], min_len: int) -> list[dict
     return rows
 
 
+def adjacent_block_pairs(blocks: list[dict[str, Any]]) -> set[tuple[int, int]]:
+    by_layout: dict[tuple[Any, ...], list[tuple[int, dict[str, Any]]]] = defaultdict(list)
+    for idx, block in enumerate(blocks):
+        key = (block["workbook"], block["sheet"], block["panel"], block["header_row"], block["data_rows"])
+        by_layout[key].append((idx, block))
+    pairs: set[tuple[int, int]] = set()
+    for hits in by_layout.values():
+        ordered = sorted(hits, key=lambda item: (int(item[1].get("group_col_start", 0)), int(item[1].get("group_col_end", 0))))
+        for left, right in zip(ordered, ordered[1:]):
+            a, b = sorted((left[0], right[0]))
+            pairs.add((a, b))
+    return pairs
+
+
+def longest_common_consecutive(a: list[str], b: list[str]) -> tuple[int, int, int]:
+    best_len = best_a = best_b = 0
+    previous = [0] * (len(b) + 1)
+    for i, aval in enumerate(a, 1):
+        current = [0] * (len(b) + 1)
+        for j, bval in enumerate(b, 1):
+            if aval == bval:
+                current[j] = previous[j - 1] + 1
+                if current[j] > best_len:
+                    best_len = current[j]
+                    best_a = i - best_len
+                    best_b = j - best_len
+        previous = current
+    return best_a, best_b, best_len
+
+
+def comparison_bases(a: dict[str, Any], b: dict[str, Any], is_adjacent: bool) -> list[str]:
+    same_panel = a["workbook"] == b["workbook"] and a["sheet"] == b["sheet"] and a["panel"] == b["panel"]
+    same_group = normalize_label(a.get("group", "")) == normalize_label(b.get("group", "")) and normalize_label(a.get("group", "")) != ""
+    bases: list[str] = []
+    if same_panel:
+        if same_group:
+            bases.append("same_panel_same_condition")
+        if is_adjacent:
+            bases.append("same_panel_adjacent_condition")
+    elif same_group:
+        bases.append("cross_panel_same_condition")
+    return bases
+
+
+def independent_context_hint(a: dict[str, Any], b: dict[str, Any]) -> tuple[bool, str]:
+    same_panel = a["workbook"] == b["workbook"] and a["sheet"] == b["sheet"] and a["panel"] == b["panel"]
+    same_group = normalize_label(a.get("group", "")) == normalize_label(b.get("group", "")) and normalize_label(a.get("group", "")) != ""
+    same_context = (
+        normalize_label(a.get("context_labels", ""))
+        == normalize_label(b.get("context_labels", ""))
+        and normalize_label(a.get("context_labels", "")) != ""
+    )
+    if same_panel and same_group and not same_context:
+        return True, "same_panel_same_condition_different_readout_or_cytokine"
+    if same_panel and not same_group:
+        return True, "same_panel_adjacent_or_distinct_condition"
+    if not same_panel and same_group:
+        return True, "cross_panel_same_condition"
+    if same_panel and same_group and same_context:
+        return False, "same_panel_same_condition_same_context_shared_source_possible"
+    return False, "independence_unclear"
+
+
+def shared_source_hint(a: dict[str, Any], b: dict[str, Any]) -> str:
+    same_context = (
+        normalize_label(a.get("context_labels", ""))
+        == normalize_label(b.get("context_labels", ""))
+        and normalize_label(a.get("context_labels", "")) != ""
+    )
+    same_group = normalize_label(a.get("group", "")) == normalize_label(b.get("group", "")) and normalize_label(a.get("group", "")) != ""
+    if same_context and same_group:
+        return "possible_shared_source_check_formula_normalization_or_export_rule"
+    return "no_shared_source_documented_by_raw_layout"
+
+
+def short_risk_hint(bases: list[str], independent: bool, shared_hint: str) -> str:
+    if independent and shared_hint == "no_shared_source_documented_by_raw_layout":
+        return "HIGH-RISK_REVIEW"
+    if "same_panel_same_condition" in bases or "cross_panel_same_condition" in bases:
+        return "WARN_TO_HIGH-RISK_REVIEW"
+    return "WARN_REVIEW"
+
+
+def short_duplicate_sequences(blocks: list[dict[str, Any]], min_len: int) -> list[dict[str, Any]]:
+    adjacent_pairs = adjacent_block_pairs(blocks)
+    rows: list[dict[str, Any]] = []
+    match_counter = 1
+    for i, a in enumerate(blocks):
+        a_raw = a["values"].split(";") if a.get("values") else []
+        a_cells = a.get("value_cells", "").split(";") if a.get("value_cells") else []
+        if len(a_raw) < min_len or AXIS_RE.match(str(a.get("group", ""))):
+            continue
+        for j in range(i + 1, len(blocks)):
+            b = blocks[j]
+            b_raw = b["values"].split(";") if b.get("values") else []
+            b_cells = b.get("value_cells", "").split(";") if b.get("value_cells") else []
+            if len(b_raw) < min_len or AXIS_RE.match(str(b.get("group", ""))):
+                continue
+            bases = comparison_bases(a, b, tuple(sorted((i, j))) in adjacent_pairs)
+            if not bases:
+                continue
+            a_keys = [value_key(v) for v in a_raw]
+            b_keys = [value_key(v) for v in b_raw]
+            full_match = len(a_keys) == len(b_keys) and len(a_keys) >= min_len and a_keys == b_keys
+            start_a, start_b, match_len = longest_common_consecutive(a_keys, b_keys)
+            if not full_match and match_len < min_len:
+                continue
+            if full_match:
+                start_a = start_b = 0
+                match_len = len(a_keys)
+                match_type = "full_short_sequence"
+            else:
+                match_type = "local_consecutive_overlap"
+            matched_keys = a_keys[start_a : start_a + match_len]
+            if len(set(matched_keys)) <= 1:
+                continue
+            matched_values = a_raw[start_a : start_a + match_len]
+            independent, independence_hint = independent_context_hint(a, b)
+            source_hint = shared_source_hint(a, b)
+            rows.append(
+                {
+                    "match_id": f"SDS-{match_counter:04d}",
+                    "match_type": match_type,
+                    "risk_hint": short_risk_hint(bases, independent, source_hint),
+                    "comparison_basis": ";".join(bases),
+                    "independent_cytokine_or_condition_hint": independence_hint,
+                    "shared_calculation_source_hint": source_hint,
+                    "workbook_a": a["workbook"],
+                    "sheet_a": a["sheet"],
+                    "panel_a": a["panel"],
+                    "group_a": a["group"],
+                    "context_a": a.get("context_labels", ""),
+                    "cell_range_a": a.get("group_cell_range", ""),
+                    "matched_cells_a": ";".join(a_cells[start_a : start_a + match_len]),
+                    "workbook_b": b["workbook"],
+                    "sheet_b": b["sheet"],
+                    "panel_b": b["panel"],
+                    "group_b": b["group"],
+                    "context_b": b.get("context_labels", ""),
+                    "cell_range_b": b.get("group_cell_range", ""),
+                    "matched_cells_b": ";".join(b_cells[start_b : start_b + match_len]),
+                    "n_a": len(a_keys),
+                    "n_b": len(b_keys),
+                    "match_length": match_len,
+                    "match_start_offset_a": start_a + 1,
+                    "match_start_offset_b": start_b + 1,
+                    "matched_values": ";".join(matched_values),
+                    "risk_rationale": (
+                        "Escalate when the matched vectors are nominally independent cytokines, conditions, "
+                        "samples, or panels and the source does not document a shared calculation source, "
+                        "technical duplicate, calibrator, or rounding/export rule."
+                    ),
+                }
+            )
+            match_counter += 1
+    return rows
+
+
 def audit_workbooks(
     inputs: list[Path],
     out: Path,
     ap_tolerance: float,
     pair_sum_tolerance: float,
     min_sequence_len: int,
+    short_sequence_len: int,
 ) -> None:
     sheet_rows: list[dict[str, Any]] = []
     label_rows: list[dict[str, Any]] = []
@@ -610,7 +819,7 @@ def audit_workbooks(
             formula_count = payload["formula_count"]
             rows = len(matrix)
             cols = max((len(r) for r in matrix), default=0)
-            nonempty_cells = numeric_cells = text_cells = long_decimal_cells = 0
+            nonempty_cells = numeric_cells = text_cells = long_decimal_cells_ge_3 = long_decimal_cells_ge_8 = 0
             max_dp = 0
             sheet_raw: list[str] = []
             sheet_values: list[float] = []
@@ -623,8 +832,10 @@ def audit_workbooks(
                         numeric_cells += 1
                         dp = decimal_places(value)
                         max_dp = max(max_dp, dp)
+                        if dp >= LONG_DECIMAL_PLACES:
+                            long_decimal_cells_ge_3 += 1
                         if dp >= 8:
-                            long_decimal_cells += 1
+                            long_decimal_cells_ge_8 += 1
                         sheet_raw.append(value)
                         sheet_values.append(to_float(value))
                         numeric_rows.append(
@@ -636,7 +847,7 @@ def audit_workbooks(
                                 "value": value,
                                 "decimal_places": dp,
                                 "last_digit": last_digit(value),
-                                "issue_flags": "long_decimal_precision_ge_8" if dp >= 8 else "",
+                                "issue_flags": f"long_decimal_precision_ge_{LONG_DECIMAL_PLACES}" if dp >= LONG_DECIMAL_PLACES else "",
                             }
                         )
                     else:
@@ -654,7 +865,8 @@ def audit_workbooks(
                     "text_cells": text_cells,
                     "formula_cells": formula_count,
                     "max_decimal_places": max_dp,
-                    "long_decimal_cells_ge_8": long_decimal_cells,
+                    "long_decimal_cells_ge_3": long_decimal_cells_ge_3,
+                    "long_decimal_cells_ge_8": long_decimal_cells_ge_8,
                 }
             )
             if sheet_values:
@@ -685,6 +897,8 @@ def audit_workbooks(
     csv_write(out / "arithmetic_progression_blocks.csv", [b for b in all_blocks if "near_exact_arithmetic_progression" in b["issue_flags"]])
     csv_write(out / "constant_pair_sum_blocks.csv", [b for b in all_blocks if "constant_adjacent_pair_sum_pattern" in b["issue_flags"]])
     csv_write(out / "duplicate_numeric_sequences.csv", duplicate_sequences(all_blocks, min_sequence_len))
+    short_hits = short_duplicate_sequences(all_blocks, short_sequence_len)
+    csv_write(out / "short_duplicate_numeric_sequences.csv", short_hits)
     print(f"workbooks={len(inputs)}")
     print(f"sheets={len(sheet_rows)}")
     print(f"numeric_cells={len(numeric_rows)}")
@@ -692,6 +906,7 @@ def audit_workbooks(
     print(f"group_blocks={len(all_blocks)}")
     print(f"arithmetic_progression_blocks={sum('near_exact_arithmetic_progression' in b['issue_flags'] for b in all_blocks)}")
     print(f"constant_pair_sum_blocks={sum('constant_adjacent_pair_sum_pattern' in b['issue_flags'] for b in all_blocks)}")
+    print(f"short_duplicate_numeric_sequences={len(short_hits)}")
     print(f"out={out}")
 
 
@@ -706,7 +921,13 @@ def main() -> int:
         default=1e-9,
         help="Maximum deviation for constant adjacent-pair sum clustering",
     )
-    parser.add_argument("--min-sequence-len", type=int, default=5, help="Minimum sequence length for duplicate-sequence hashing")
+    parser.add_argument("--min-sequence-len", type=int, default=3, help="Minimum sequence length for duplicate-sequence hashing")
+    parser.add_argument(
+        "--short-sequence-len",
+        type=int,
+        default=SHORT_SEQUENCE_LEN,
+        help="Minimum length for same-panel/cross-panel short vector and local consecutive duplicate screens",
+    )
     args = parser.parse_args()
 
     src = Path(args.input)
@@ -716,7 +937,14 @@ def main() -> int:
         inputs = [src]
     if not inputs:
         raise SystemExit("No xlsx files found.")
-    audit_workbooks(inputs, Path(args.out), args.ap_tolerance, args.pair_sum_tolerance, args.min_sequence_len)
+    audit_workbooks(
+        inputs,
+        Path(args.out),
+        args.ap_tolerance,
+        args.pair_sum_tolerance,
+        args.min_sequence_len,
+        args.short_sequence_len,
+    )
     return 0
 
 

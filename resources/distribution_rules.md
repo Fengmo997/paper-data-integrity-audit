@@ -28,6 +28,10 @@ reproducible.
   small n across many panels.
 - Check whether sample rankings are suspiciously identical across unrelated
   assays.
+- Check same-panel adjacent condition columns, same-panel same-condition
+  columns, and cross-panel same-condition columns for identical short vectors
+  of length `3` or more, including local runs where at least `3` consecutive
+  numeric positions match.
 
 ## Interpretation Guardrails
 
@@ -75,10 +79,17 @@ reproducible.
 - Values appear generated from `mean +/- k * step`, where `step` is compatible
   with the reported SD or SEM.
 - Nominally independent observations contain completely identical long-decimal
-  values or highly similar long-decimal tails. Treat exact repeats with 6 or
-  more decimal places, or repeated/similar tails of 6 or more digits across
+  values or highly similar long-decimal tails. Treat exact repeats with 3 or
+  more decimal places, or repeated/similar tails of 3 or more digits across
   independent biological replicates, conditions, samples, or panels, as
   HIGH-RISK unless a documented technical reason is present.
+- Same-panel adjacent or same-condition columns, or cross-panel same-condition
+  columns, contain identical short numeric vectors of length `3` or more, or a
+  local run of at least `3` consecutive identical values. Grade as HIGH-RISK
+  when the values are nominally independent cytokines, conditions, samples, or
+  panels and no shared calculation source, calibrator, technical duplicate, or
+  rounding/export rule is documented; grade as WARN when a shared source is
+  plausible but not explicit.
 - Multiple unrelated biological groups show pseudo-random structure, such as
   low last-digit entropy, repeated terminal-digit templates, monotonic row
   order, or symmetric jitter around means.

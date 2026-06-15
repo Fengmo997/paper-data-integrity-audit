@@ -38,10 +38,15 @@ Use one overall verdict and issue-level risk labels.
   technical-duplicate, percentage-complement, or compositional rule.
 - Nominally independent biological replicates, conditions, samples, or panels
   contain completely identical long-decimal values or highly similar
-  long-decimal tails. Exact repeated values with 6 or more decimal places, or
-  repeated/similar decimal tails of 6 or more digits, are HIGH-RISK unless the
+  long-decimal tails. Exact repeated values with 3 or more decimal places, or
+  repeated/similar decimal tails of 3 or more digits, are HIGH-RISK unless the
   source explicitly documents a shared calibrator, detection floor, technical
   duplicate, or rounding/export rule.
+- Same-panel adjacent or same-condition columns, or cross-panel same-condition
+  columns, contain identical short numeric vectors of length `3` or more, or a
+  local run of at least `3` consecutive identical values, without a documented
+  shared calculation source, calibrator, technical duplicate, or rounding/export
+  rule.
 - A derived panel, such as AUC, ratio, percentage, or fold change, cannot be
   recalculated from its declared parent raw panel.
 - Reported p values reproduce only from suspicious reconstructed source values,

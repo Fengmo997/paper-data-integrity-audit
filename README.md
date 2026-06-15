@@ -15,14 +15,15 @@ data".
 
 - Figure-to-data mapping: links each panel to source files, claimed `n`, groups,
   plotted statistics, and main claims.
-- Decimal precision: mixed precision, long decimal tails, integer-like values
-  reported as arbitrary decimals, impossible percentages, and repeated decimal
-  tails.
+- Decimal precision: mixed precision, 3+ place decimal tails, integer-like
+  values reported as arbitrary decimals, impossible percentages, and repeated
+  decimal tails.
 - Digit distribution: last-digit counts, first-digit counts, digit entropy,
   terminal `0/5` enrichment, and Benford-style reference checks when appropriate.
 - Pseudo-random or reconstructed values: arithmetic progressions, monotonic
   replicate ordering, values centered on the mean, repeated terminal-digit
-  templates, and suspiciously similar long decimals.
+  templates, suspiciously similar 3+ place decimals, reused short vectors, and
+  repeated local runs of 3 or more consecutive numeric positions.
 - Group-block statistics: `n`, mean, SD, SEM, CV, min/max, duplicate values,
   decimal-place distribution, and raw values.
 - Derived-panel recalculation: AUC, percentage, ratio, fold change, normalized
@@ -159,7 +160,12 @@ Rscript scripts/figure_reproduce.R raw_data.csv group value \
 - `group_block_summary.csv`: per-group `n`, mean, SD, SEM, duplicate values,
   decimal places, digit distributions, arithmetic checks, and raw values.
 - `arithmetic_progression_blocks.csv`: near-exact arithmetic progression blocks.
-- `duplicate_numeric_sequences.csv`: repeated long numeric sequences.
+- `duplicate_numeric_sequences.csv`: repeated numeric sequences, defaulting to
+  length 3 or longer.
+- `short_duplicate_numeric_sequences.csv`: same-panel adjacent/same-condition
+  short vector matches, cross-panel same-condition matches, and local repeated
+  runs of 3 or more consecutive numeric positions, with risk hints that consider
+  independent cytokine/condition labels versus likely shared calculation source.
 - `sheet_csv/`: worksheet exports as CSV files.
 
 `decimal_audit.py` writes numeric-column summaries including:

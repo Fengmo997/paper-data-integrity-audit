@@ -15,6 +15,7 @@ from typing import Iterable
 
 
 NUMERIC_RE = re.compile(r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?%?$")
+LONG_DECIMAL_PLACES = 3
 
 
 def clean_cell(value: object) -> str:
@@ -71,7 +72,7 @@ def decimal_tail(text: str) -> str | None:
     if "." not in raw or "e" in raw.lower():
         return None
     tail = raw.split(".", 1)[1]
-    return tail if len(tail) >= 2 else None
+    return tail[-LONG_DECIMAL_PLACES:] if len(tail) >= LONG_DECIMAL_PLACES else None
 
 
 def read_csv_like(path: Path, delimiter: str | None) -> dict[str, list[dict[str, str]]]:
@@ -153,7 +154,8 @@ def audit_column(sheet: str, column: str, values: list[str], denominator: int | 
     tail_counts = Counter(tails)
     repeated_tails = {k: v for k, v in tail_counts.items() if v >= 3}
 
-    long_decimal_count = sum(1 for p in places if p >= 6)
+    long_decimal_count_ge_3 = sum(1 for p in places if p >= LONG_DECIMAL_PLACES)
+    long_decimal_count_ge_6 = sum(1 for p in places if p >= 6)
     integer_as_decimal_count = 0
     for text, value in zip(numeric_values, parsed):
         if "." in numeric_text(text) and float(value).is_integer():
@@ -177,7 +179,7 @@ def audit_column(sheet: str, column: str, values: list[str], denominator: int | 
     issues: list[str] = []
     if len(place_counts) > 2:
         issues.append("mixed_decimal_precision")
-    if long_decimal_count:
+    if long_decimal_count_ge_3:
         issues.append("long_decimal_precision")
     if integer_as_decimal_count:
         issues.append("integer_reported_as_decimal")
@@ -198,7 +200,8 @@ def audit_column(sheet: str, column: str, values: list[str], denominator: int | 
         "repeated_values": json.dumps(repeated_values, sort_keys=True),
         "decimal_place_counts": json.dumps(dict(sorted(place_counts.items())), sort_keys=True),
         "max_decimal_places": max(places) if places else "",
-        "long_decimal_count_ge_6": long_decimal_count,
+        "long_decimal_count_ge_3": long_decimal_count_ge_3,
+        "long_decimal_count_ge_6": long_decimal_count_ge_6,
         "integer_as_decimal_count": integer_as_decimal_count,
         "last_digit_counts": json.dumps(dict(sorted(digit_counts.items())), sort_keys=True),
         "last_digit_0_or_5_rate": round(zero_five_rate, 6) if zero_five_rate is not None else "",
@@ -236,6 +239,7 @@ def main() -> int:
         "repeated_values",
         "decimal_place_counts",
         "max_decimal_places",
+        "long_decimal_count_ge_3",
         "long_decimal_count_ge_6",
         "integer_as_decimal_count",
         "last_digit_counts",
@@ -254,4 +258,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
