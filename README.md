@@ -83,21 +83,29 @@ Install Python dependencies when you need Excel `.xlsx`, PDF, or image scanning:
 
 ```bash
 cd ~/.codex/skills/paper-data-integrity-audit
-python -m pip install --user -r requirements.txt
+py -m pip install --user -r requirements.txt
 ```
+
+For reproducible output matching the current validated workflow, install the
+locked dependency set instead:
+
+```bash
+cd ~/.codex/skills/paper-data-integrity-audit
+py -m pip install --user -r requirements-lock.txt
+py scripts/preflight_check.py --strict-versions --check-file-hashes
+```
+
+`requirements.txt` is intentionally compatible and may install newer packages.
+`requirements-lock.txt` pins the versions used to validate the current output
+format and thresholds.
+Missing `Rscript` is reported as a warning by default because the Excel/PDF
+standard pipeline does not require R. Use `--require-rscript` only when you plan
+to run the optional R helper scripts.
 
 Check the environment:
 
-```bash
-python - <<'PY'
-for m in ["pandas", "openpyxl", "fitz", "PIL", "cv2", "numpy"]:
-    try:
-        mod = __import__(m)
-        print(m, "OK", getattr(mod, "__version__", ""))
-    except Exception as exc:
-        print(m, "MISSING", type(exc).__name__, exc)
-PY
-Rscript --version
+```powershell
+py scripts/preflight_check.py
 ```
 
 Dependency tiers:
@@ -113,17 +121,64 @@ for details.
 
 ## Quick Usage
 
+For full paper/source-data rescans, prefer the standard wrapper. It fixes the
+current checked parameters and writes an environment manifest:
+
+```bash
+py scripts/run_standard_audit.py /path/to/paper_or_raw_data_dir \
+  --out audit_results/rescan_full \
+  --scan-pdfs
+```
+
+The standard wrapper:
+
+- stages discovered `.xlsx` files into `_standard_xlsx_inputs/` before scanning;
+- skips generated directories such as `audit_results/` by default;
+- runs `source_data_workbook_audit.py` with the current full parameter set;
+- runs `formula_recheck.py` with tolerance `1e-9`;
+- optionally runs the four-layer PDF/image scan for discovered PDFs;
+- builds `visual_report/visual_report.html` with `--max-per-type 0`;
+- records `audit_environment_manifest.json` for later comparison.
+
+Use `--dry-run` to print the exact commands without running them. Use
+`--include-generated-dirs` only when you intentionally want to scan files inside
+old audit output folders.
+
+Manual script calls are still available for targeted checks:
+
 Run source-data workbook screening on an irregular Excel source-data folder:
 
 ```bash
-python scripts/source_data_workbook_audit.py /path/to/paper_source_data \
+py scripts/source_data_workbook_audit.py /path/to/paper_source_data \
   --out audit_results/source_data_scan
 ```
 
 Run column-level decimal audit:
 
 ```bash
-python scripts/decimal_audit.py raw_data.xlsx --out audit_results/decimal_audit.csv
+py scripts/decimal_audit.py raw_data.xlsx --out audit_results/decimal_audit.csv
+```
+
+Recalculate common Excel formulas against cached values:
+
+```bash
+py scripts/formula_recheck.py raw_data.xlsx \
+  --out audit_results/source_data_scan/formula_recheck.csv
+```
+
+Run four-layer PDF/image screening:
+
+```bash
+py scripts/pdf_image_integrity_scan.py paper.pdf --out audit_results/pdf_image_scan
+```
+
+Build the visual evidence report:
+
+```bash
+py scripts/build_visual_audit_report.py --audit-dir audit_results \
+  --source-scan audit_results/source_data_scan \
+  --pdf-scan audit_results/pdf_image_scan \
+  --max-per-type 0
 ```
 
 Run tidy-data distribution audit:
@@ -154,6 +209,9 @@ Rscript scripts/figure_reproduce.R raw_data.csv group value \
 - `workbook_sheet_summary.csv`: workbook/sheet inventory and numeric-cell counts.
 - `panel_label_cells.csv`: detected figure/panel labels in worksheets.
 - `numeric_cell_audit.csv`: every numeric cell with decimal places and last digit.
+- `exact_long_decimal_repeats.csv`: exact repeated values with displayed decimal
+  precision `>=3`; precision `>=6` repeats are high-risk review only when they
+  are not binary floating point display artifacts.
 - `digital_distribution_summary.csv`: sheet-level and group-level digit
   distributions, entropy, terminal `0/5`, Benford reference, and pseudo-randomness
   screens.
@@ -166,7 +224,20 @@ Rscript scripts/figure_reproduce.R raw_data.csv group value \
   short vector matches, cross-panel same-condition matches, and local repeated
   runs of 3 or more consecutive numeric positions, with risk hints that consider
   independent cytokine/condition labels versus likely shared calculation source.
+- `scaled_numeric_sequence_blocks.csv`: aligned numeric vectors that are fixed
+  scalar multiples of one another.
+- `duplicate_numeric_matrix_blocks.csv`: same-sheet figure/panel anchored
+  numeric rectangles that are identical, highly overlapping, or contain a
+  continuous identical submatrix.
 - `sheet_csv/`: worksheet exports as CSV files.
+
+Baseline source-data parameters are fixed unless a run explicitly documents a
+parameter-tuning experiment: numeric column threshold `80%`, long decimal `>=3`,
+six-decimal count `>=6`, repeated decimal tail last `3` digits repeated at least
+`3` times, last-digit entropy `<2.5`, last-digit chi-square `>=27.88`,
+`--ap-tolerance=0.001`, `--pair-sum-tolerance=1e-9`,
+`--min-sequence-len=3`, `--short-sequence-len=3`, and formula validation
+tolerance `<=1e-9`.
 
 `decimal_audit.py` writes numeric-column summaries including:
 
@@ -180,18 +251,48 @@ Rscript scripts/figure_reproduce.R raw_data.csv group value \
 
 ## PDF/Image Screening Pattern
 
-The skill supports PDF/image screening workflows using:
+The skill supports four-layer PDF/image screening with
+`scripts/pdf_image_integrity_scan.py`:
 
-- embedded image extraction from PDF object IDs (`xref`)
-- exact binary `sha256` duplicate detection
-- perceptual hashes (`dhash`, `ahash`) for near-match candidates
-- rendered-page hashes
-- fixed-window repeated-region scans
-- manual review contact sheets for image candidates
+1. Extract embedded raster image placements from PDF image object IDs (`xref`),
+   including dimensions, colorspace, placement coordinates, `sha256`, `dhash`,
+   and `ahash`.
+2. Detect exact binary `sha256` duplicates. Byte-identical embedded image data
+   placed under different biological conditions, samples, or figure labels is
+   stronger evidence than visual similarity alone.
+3. Detect near embedded-image matches with perceptual hashes (`dhash`, `ahash`).
+   These are WARN review candidates until inspected on contact sheets.
+4. Render pages and scan both whole-page hashes and fixed-window local regions.
+   Repeated rendered tiles are also review candidates and need label/context
+   checks.
 
-Exact `sha256` matches of image objects placed under different biological
-conditions, samples, or figure labels are higher-risk than perceptual near
-matches. Perceptual near matches are review candidates only.
+Default outputs include `embedded_image_placements.csv`,
+`exact_embedded_image_duplicates.csv`, `near_embedded_image_matches.csv`,
+`page_render_hashes.csv`, `near_page_render_matches.csv`,
+`region_duplicate_candidates.csv`, and contact sheets for candidate review.
+
+## Visual Report Standard
+
+`build_visual_audit_report.py` turns audit CSVs into a reviewable HTML/Markdown
+report with evidence images:
+
+- exact image duplicate contact sheets are embedded when present
+- near image/page/region candidates are embedded as WARN review evidence
+- source-data anomalies with cell coordinates are rendered as complete
+  highlighted HTML tables from `sheet_csv`
+- opening a `?issue=NUM-xxx` table shows only that NUM's highlights
+- cross-sheet A/B evidence uses per-issue wrapper pages so B coordinates are
+  never projected onto the A sheet
+- each evidence block inside one NUM has its own color: A/B blocks differ, and
+  window arithmetic source A, source B, and target use three different colors
+- image evidence opens in a lightbox with a Close button, Escape close,
+  mouse-wheel zoom, drag-to-pan while zoomed, and automatic zoom reset
+- binary-float display tails and compact scientific notation are normalized in
+  the visual layer only; backing CSVs remain unchanged
+- the default report expansion is unlimited (`--max-per-type 0`)
+
+The visual report complements the CSV files. Keep the backing CSV path, raw data
+file, sheet/cells, risk grade, and cautious interpretation in the final report.
 
 ## Risk Grading
 

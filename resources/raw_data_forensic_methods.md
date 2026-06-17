@@ -16,6 +16,10 @@ Record every file and sheet before interpreting numbers:
 - Image files: original resolution, metadata, file hashes, and whether the file
   is a final figure crop or original raw image.
 
+For `.xlsx` workbooks, the baseline inventory fields are rows, columns,
+non-empty cells, numeric cells, formula cells, `long_decimal_cells_ge_3`, and
+`long_decimal_cells_ge_8`.
+
 ## 2. Figure-to-Data Map
 
 Build a table linking figure panels to source files:
@@ -49,6 +53,21 @@ For each numeric table, calculate:
 
 Interpretation guardrail: long decimals are not automatically suspicious when
 the values are derived ratios, normalized quantities, or instrument exports.
+
+Use these fixed baseline thresholds unless a parameter-tuning sensitivity run is
+explicitly requested and labeled as such:
+
+- numeric column: at least `80%` of non-empty values are numeric
+- long decimal: displayed decimal places `>=3`
+- six-decimal count: displayed decimal places `>=6`
+- repeated decimal tail: last `3` decimal digits repeated at least `3` times
+- low last-digit entropy: `<2.5`
+- last-digit chi-square reference: `>=27.88`
+
+Exact repeated values with displayed decimal precision `>=3` should be listed.
+Escalate precision `>=6` repeats to high-risk review only when they do not look
+like binary floating point display artifacts such as `0.23200000000000001` or
+`17.600000000000001`.
 
 ## 4. Group Block Audit
 
@@ -124,6 +143,9 @@ a direct accusation. Check for:
   same-panel same-condition columns, or cross-panel same-condition columns;
   also check for local runs where at least 3 consecutive positions are identical
   even when the full column is not identical
+- exact or near-exact fixed-ratio numeric vectors in the same table layout,
+  such as one condition column satisfying `B = 2 * A`, `B = 0.5 * A`, or
+  `B = 3/5 * A` at every aligned replicate position
 - repeated decimal tails or copied terminal-digit patterns
 - excessive avoidance or enrichment of round terminal digits
 - identical sample ranking across unrelated assays
@@ -197,12 +219,60 @@ Also screen short column/vector reuse:
   or readouts
 - cross-panel same-condition columns
 - local consecutive overlap where at least `3` numeric positions match in order
+- same-sheet figure/panel anchored numeric matrix blocks where the same rows and
+  columns are identical, highly overlapping, or contain a continuous identical
+  submatrix under different panel labels
 
-Grade by context. Treat the match as HIGH-RISK when the repeated values are
-nominally independent cytokines, conditions, samples, or panels and the source
-does not document a shared calculation source, calibrator, technical duplicate,
-or rounding/export rule. Treat as WARN when shared controls or technical reuse
-are plausible but not explicitly documented.
+Grade by context. Retain every short-column or short-vector reuse as at least
+WARN so it is reviewed, even when a shared source is plausible. Treat the match
+as HIGH-RISK when the repeated values are nominally independent cytokines,
+conditions, samples, or panels and the source does not document a shared
+calculation source, calibrator, technical duplicate, or rounding/export rule.
+
+For matrix blocks, use `duplicate_numeric_matrix_blocks.csv`. The default
+partial-overlap rule is at least `12` matched cells and a matched-cell fraction
+of at least `0.80`. The same output also retains a continuous exact submatrix
+when it has at least `3` rows, `2` columns, and `12` cells, even if the larger
+matrix does not reach the whole-block overlap threshold. Tune these thresholds
+with `--matrix-match-fraction`, `--matrix-min-rows`, `--matrix-min-cols`, and
+`--matrix-min-cells`. Exact same-size reuse is stronger, but high-overlap or
+continuous-submatrix reuse is also reportable when the panels represent
+nominally different treatments, drugs, cell lines, assays, or summary claims. If
+downstream AUC, IC50, mean, error-bar, or other summary rows differ after
+identical or highly overlapping raw blocks, report that the summaries are not
+reproducible from the duplicated source block without an additional documented
+transformation.
+
+Also screen for fixed-ratio scaled vector reuse in same-layout columns or group
+vectors. Retain candidates when at least `3` aligned numeric positions are
+nonconstant and one vector is a fixed scalar multiple of another within stored
+numeric precision. Report the ratio, simple-ratio label when present, source
+cells, values, and residual error. Grade as HIGH-RISK when the vectors are
+nominally independent conditions, genes, samples, or panels and no documented
+normalization, calibrator, technical duplicate, or deterministic transformation
+explains the scaling.
+
+For same-sheet sliding-window arithmetic relations, also screen two-window
+constant-sum complements directly. A relation such as `A = 2 - B` should be
+reported as `target = constant - source` with `sum_constant=2`, equivalent to
+checking that `A+B` is fixed across at least `3` adjacent aligned values. This
+does not require a separate constant-valued column containing `2`.
+
+The same-sheet sliding-window screen should cover common deterministic
+transforms beyond direct add/subtract/multiply/divide: fixed offsets, fixed
+ratios, affine transforms (`target = constant * source + offset`), reciprocal or
+constant-product forms (`target = constant / source`), scaled sums/differences/
+products/ratios, weighted combinations (`target = A + constant * B`), and
+composition fractions (`target = constant * A/(A+B)`). These are candidate
+screens only; lower concern when labels, formulas, legends, or table structure
+show that the target is a documented derived metric.
+
+Use table-size adaptive execution without changing the mathematical thresholds:
+small sheets can be scanned exhaustively, while large sheets should use
+indexed/block-neighborhood matching and parallel workers to preserve coverage
+without all-by-all combinatorial explosion. Report the execution strategy in the
+candidate CSV/visual report, for example `exhaustive-small-table` or
+`indexed-large-table`, so reviewers understand how the candidates were found.
 
 High-risk examples:
 
@@ -211,6 +281,8 @@ High-risk examples:
 - qPCR, ELISA, image quantification, or behavior traces reused across unrelated
   panels.
 - Same replicate sequence appearing under different labels without explanation.
+- qPCR replicate vectors where one knockdown/condition column is exactly `2x`,
+  `0.5x`, or `3/5x` another nominally independent condition column.
 
 Low-risk examples:
 
@@ -262,6 +334,8 @@ from the underlying parent/raw data when available.
 Keep image findings separate from numeric findings:
 
 - exact embedded-image hash duplicates
+- near embedded-image perceptual-hash candidates
+- rendered-page duplicate or near-duplicate candidates
 - duplicated regions
 - rotated/flipped reuse
 - repeated backgrounds
@@ -269,8 +343,26 @@ Keep image findings separate from numeric findings:
 - duplicated bands or loading controls
 - source image resolution mismatch
 
-PDF exact-hash duplicates are only a first screen. Original images are required
-for conclusive microscopy, histology, western blot, IF, and IHC checks.
+Use four layers for PDF figure files:
+
+1. Extract embedded raster image objects and placements with PyMuPDF. Record
+   page, `xref`, dimensions, colorspace, placement coordinates, `sha256`,
+   `dhash`, and `ahash`.
+2. Compare raw embedded image bytes with `sha256`. A duplicate `sha256` is a
+   byte-level identical embedded image object. When the placements sit under
+   different panel labels, conditions, cell lines, or samples, this is stronger
+   evidence than visual similarity and may be HIGH-RISK.
+3. Compare non-identical embedded images with perceptual hashes. `dhash` and
+   `ahash` Hamming-distance matches are WARN review candidates, not final
+   findings, because many assay images can be naturally similar.
+4. Render pages and scan whole-page hashes plus local rendered tiles. Page and
+   tile matches catch reuse that is not exposed as repeated PDF image objects,
+   but they require visual review and label-context checks.
+
+PDF exact-hash duplicates are only one layer of the screen. Original images are
+required for conclusive microscopy, histology, western blot, IF, and IHC checks,
+especially for rotation/flip, splicing, contrast, crop-boundary, and band-level
+claims.
 
 ## 12. Risk Interpretation
 

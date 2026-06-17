@@ -32,6 +32,15 @@ reproducible.
   columns, and cross-panel same-condition columns for identical short vectors
   of length `3` or more, including local runs where at least `3` consecutive
   numeric positions match.
+- Check same-sheet figure/panel anchored numeric rectangles for exact,
+  high-overlap, or continuous-submatrix reuse. The default whole-matrix
+  threshold is at least `12` matched cells and `match_fraction >= 0.80`; the
+  default continuous exact submatrix threshold is at least `3` rows, `2`
+  columns, and `12` cells. Tune these thresholds with the `--matrix-*` options
+  when a stricter or exploratory screen is needed.
+- Check same-layout condition columns or group vectors for fixed-ratio scaling,
+  where one nonconstant vector is an exact or near-exact scalar multiple of
+  another across at least `3` aligned numeric positions.
 
 ## Interpretation Guardrails
 
@@ -85,11 +94,25 @@ reproducible.
   HIGH-RISK unless a documented technical reason is present.
 - Same-panel adjacent or same-condition columns, or cross-panel same-condition
   columns, contain identical short numeric vectors of length `3` or more, or a
-  local run of at least `3` consecutive identical values. Grade as HIGH-RISK
-  when the values are nominally independent cytokines, conditions, samples, or
-  panels and no shared calculation source, calibrator, technical duplicate, or
-  rounding/export rule is documented; grade as WARN when a shared source is
-  plausible but not explicit.
+  local run of at least `3` consecutive identical values. Grade every retained
+  short-column reuse as at least WARN so it is manually reviewed. Grade as
+  HIGH-RISK when the values are nominally independent cytokines, conditions,
+  samples, or panels and no shared calculation source, calibrator, technical
+  duplicate, or rounding/export rule is documented.
+- Same-sheet figure/panel anchored numeric rectangles contain exact,
+  high-overlap, or continuous-submatrix reuse. Grade as HIGH-RISK when the
+  panels represent nominally different drugs, treatments, cell lines, assays, or
+  summary claims and no shared source, technical duplicate, or intentional reuse
+  is documented. If downstream AUC, IC50, means, error bars, or p values differ
+  after identical/high-overlap raw blocks, report that the summaries cannot be
+  reproduced from the supplied source block without another documented
+  transformation.
+- Same-layout condition columns or group vectors contain fixed-ratio scaled
+  numeric vectors, such as `B = 2 * A`, `B = 0.5 * A`, or `B = 3/5 * A`, across
+  at least `3` aligned nonconstant numeric positions. Grade as HIGH-RISK when
+  the values are nominally independent cytokines, genes, conditions, samples, or
+  panels and no shared normalization, calibrator, technical duplicate, or
+  deterministic transformation is documented.
 - Multiple unrelated biological groups show pseudo-random structure, such as
   low last-digit entropy, repeated terminal-digit templates, monotonic row
   order, or symmetric jitter around means.

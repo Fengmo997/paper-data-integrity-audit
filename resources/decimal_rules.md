@@ -4,6 +4,12 @@ Use decimal precision as a screening signal, not as proof of misconduct.
 
 ## Common Checks
 
+- For Excel workbooks, count decimal places from the displayed cell format when
+  it is explicit, such as `0.00`, rather than from a downstream Python/R
+  floating-point string. If a value has a typical binary-float tail
+  (`...000000` or `...999999`) and is within a tiny tolerance of a shorter
+  displayed value, normalize it for decimal-place, last-digit, and decimal-tail
+  checks while reporting the normalization count/examples separately.
 - Cell counts, colony counts, animal counts, and positive-cell counts should be
   integers before normalization.
 - Percentages must be compatible with their denominator. For denominator n, the

@@ -16,8 +16,8 @@ PASS / WARN / HIGH-RISK / INSUFFICIENT DATA
 
 ## 4. Key Findings With Raw Data Files
 
-| Issue ID | Risk | Figure/panel | Raw data file | Sheet/cells | Finding |
-|---|---|---|---|---|---|
+| Issue ID | Risk | Figure/panel | Raw data file | Sheet/cells | Finding | Visual evidence |
+|---|---|---|---|---|---|---|
 
 ## 5. Decimal Precision Findings
 
@@ -51,19 +51,32 @@ PASS / WARN / HIGH-RISK / INSUFFICIENT DATA
 
 ## 11. Image Integrity Findings
 
-| Figure | Raw data file | Image type | Concern | Evidence | Risk |
-|---|---|---|---|---|---|
+| Figure | Raw data file | Image type | Concern | Evidence | Visual evidence | Risk |
+|---|---|---|---|---|---|---|
 
-## 12. Highest-Risk Issues
+## 12. Visual Evidence Appendix
+
+Primary visual report:
+
+- `visual_report/visual_report.html`
+- `visual_report/visual_report.md`
+- `visual_report/visual_evidence/`
+
+Include exact duplicate image contact sheets when present. Include highlighted
+source-data table excerpts for numeric anomalies with cell coordinates. For
+paired or multi-block anomalies, use distinct colors for different match groups
+and related A/B shades for paired ranges.
+
+## 13. Highest-Risk Issues
 
 1.
 
-## 13. Additional Raw Data Needed
+## 14. Additional Raw Data Needed
 
 | Missing item | Why needed | Affected figures/tables |
 |---|---|---|
 
-## 14. Cautious Conclusion
+## 15. Cautious Conclusion
 
 State what is inconsistent, what was reproducible, what remains unresolved, and
 which findings require author clarification. Do not state or imply misconduct

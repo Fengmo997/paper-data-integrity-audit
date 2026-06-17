@@ -19,6 +19,9 @@ Use one overall verdict and issue-level risk labels.
 - Some p values, means, or error bars differ slightly.
 - Small n limits distribution interpretation.
 - Patterns are suspicious but have plausible technical explanations.
+- Short-column or short-vector reuse is present but a shared source, technical
+  reuse, normalization, or export rule remains plausible; retain as WARN so the
+  match is manually reviewed.
 - One isolated last-digit or first-digit anomaly appears, but n is small or the
   assay context plausibly explains the pattern.
 - Method wording is internally inconsistent, but p values reproduce under a
@@ -47,6 +50,16 @@ Use one overall verdict and issue-level risk labels.
   local run of at least `3` consecutive identical values, without a documented
   shared calculation source, calibrator, technical duplicate, or rounding/export
   rule.
+- Same-sheet figure/panel anchored numeric matrix blocks are exactly duplicated,
+  highly overlapping, or contain a continuous identical submatrix across
+  nominally different drugs, treatments, cell lines, assays, or summary claims,
+  without a documented shared source, technical duplicate, or intentional reuse.
+  Escalate further when downstream summaries such as AUC, IC50, means, error
+  bars, or p values differ after the duplicated/high-overlap raw blocks.
+- Same-layout condition columns or group vectors are fixed scalar multiples of
+  one another across at least `3` aligned nonconstant numeric positions, without
+  a documented shared normalization, calibrator, technical duplicate, or
+  deterministic transformation rule.
 - A derived panel, such as AUC, ratio, percentage, or fold change, cannot be
   recalculated from its declared parent raw panel.
 - Reported p values reproduce only from suspicious reconstructed source values,

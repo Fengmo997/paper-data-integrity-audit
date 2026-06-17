@@ -1,0 +1,118 @@
+{
+  "skill_name": "paper-data-integrity-audit",
+  "skill_version": "2026-06-16.4",
+  "profile_name": "standard_full_audit_current",
+  "reference_platform": {
+    "os": "Windows",
+    "python_launcher": "py",
+    "python_reference": "3.14",
+    "rscript_required_for_r_helpers": true
+  },
+  "pinned_python_packages": {
+    "pandas": "3.0.3",
+    "openpyxl": "3.1.5",
+    "PyMuPDF": "1.27.2.3",
+    "pillow": "12.2.0",
+    "numpy": "2.4.6",
+    "opencv-python-headless": "4.13.0.92"
+  },
+  "source_data_workbook_audit": {
+    "long_decimal_places": 3,
+    "workbook_sheet_outputs": [
+      "workbook_sheet_summary.csv",
+      "panel_label_cells.csv",
+      "numeric_cell_audit.csv",
+      "exact_long_decimal_repeats.csv",
+      "digital_distribution_summary.csv",
+      "group_block_summary.csv",
+      "arithmetic_progression_blocks.csv",
+      "constant_pair_sum_blocks.csv",
+      "duplicate_numeric_sequences.csv",
+      "short_duplicate_numeric_sequences.csv",
+      "scaled_numeric_sequence_blocks.csv",
+      "duplicate_numeric_matrix_blocks.csv",
+      "window_arithmetic_relation_candidates.csv",
+      "sheet_csv/"
+    ],
+    "standard_args": {
+      "--ap-tolerance": "0.001",
+      "--pair-sum-tolerance": "1e-9",
+      "--min-sequence-len": "3",
+      "--short-sequence-len": "3",
+      "--scaled-sequence-len": "3",
+      "--scale-rel-tolerance": "1e-6",
+      "--scale-abs-tolerance": "1e-9",
+      "--window-relation-min-len": "3",
+      "--window-relation-max-len": "6",
+      "--window-relation-rel-tolerance": "1e-6",
+      "--window-relation-abs-tolerance": "1e-9",
+      "--window-relation-max-windows-per-sheet": "0",
+      "--window-relation-max-hits-per-sheet": "0",
+      "--window-relation-workers": "4",
+      "--matrix-min-rows": "3",
+      "--matrix-min-cols": "2",
+      "--matrix-min-cells": "12",
+      "--matrix-match-fraction": "0.80"
+    }
+  },
+  "formula_recheck": {
+    "standard_args": {
+      "--tolerance": "1e-9"
+    }
+  },
+  "pdf_image_integrity_scan": {
+    "standard_args": {
+      "--min-image-size": "80",
+      "--dhash-threshold": "5",
+      "--ahash-threshold": "8",
+      "--render-dpi": "150",
+      "--page-dhash-threshold": "3",
+      "--page-ahash-threshold": "5",
+      "--tile-size": "224",
+      "--tile-stride": "224",
+      "--tile-min-gray-sd": "18",
+      "--tile-min-gray-mean": "8",
+      "--tile-max-gray-mean": "248",
+      "--max-near-pairs": "5000",
+      "--max-region-pairs": "5000",
+      "--contact-sheet-limit": "80"
+    }
+  },
+  "visual_report": {
+    "default_max_per_type": 0,
+    "standard_args": {
+      "--max-per-type": "0"
+    },
+    "required_behaviors": [
+      "unlimited main finding expansion by default",
+      "front-page evidence browser with table iframe support",
+      "complete full-table HTML evidence pages, not cropped primary evidence",
+      "per-issue filtering with data-highlight-map",
+      "do not project cross-sheet B-side coordinates onto A-side sheets",
+      "per-issue multi-sheet wrapper pages for cross-sheet evidence",
+      "presentation-only normalization of binary-float tails and compact scientific notation",
+      "full_csv_visualization.html and .md generated when positive max-per-type truncates rows",
+      "within one NUM, each evidence block has its own fill/outline",
+      "A/B evidence uses distinct A and B colors",
+      "arithmetic evidence uses distinct source A, source B, and target colors",
+      "image lightbox supports Close, Escape close, mouse-wheel zoom, drag-to-pan, and zoom reset"
+    ],
+    "role_color_offsets": {
+      "A": 0,
+      "B": 3,
+      "target": 6
+    }
+  },
+  "file_hashes": {
+    "SKILL.md": "3f19238adb56920fc4fd9416b67235c43c58a9e74930349d5c962fd2f4de20c6",
+    "README.md": "c5b6d5b17789fd1fd293a10c41c92f4dea8703571bfe585f0b3c0634abca1fde",
+    "requirements-lock.txt": "bd83d275fe18d76a4e2cd071384c7102ad74942c30d031aac9f0fb399ebeff8f",
+    "resources/environment_dependencies.md": "137fc15c3cb0cb6ce0130ac1b3d4469ae543517bc32b0d23f04163e7c961dab3",
+    "scripts/source_data_workbook_audit.py": "3685014b244a0d692de354362778efda64333e5c4e9a5fa5e419a91637a4a4be",
+    "scripts/pdf_image_integrity_scan.py": "b2307125b58883cb54b328ac988976363e73ceac3094c583d8a23687c43305e0",
+    "scripts/build_visual_audit_report.py": "562c2e6f1038faa1d432b88cbb90e28b4ff761affb4843c9ba91616607663e4d",
+    "scripts/formula_recheck.py": "a8c8542cbdfb24806df3f83bfc1431fc4cf6c2201fc300d1c3c8e95a889745f8",
+    "scripts/preflight_check.py": "f778583bbc038a8c35ac0f81701d90d996d0fff9ec28f3c52eb42e39a25bacc2",
+    "scripts/run_standard_audit.py": "58716ddb5e0f736ee76068486dc344e63df77cda1af7d8ea72d80ffb59afb4e9"
+  }
+}

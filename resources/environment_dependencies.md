@@ -8,8 +8,16 @@ only what is needed for the requested inputs.
 Recommended install command:
 
 ```bash
-python -m pip install --user -r requirements.txt
+py -m pip install --user -r requirements-lock.txt
+py scripts/preflight_check.py --strict-versions --check-file-hashes
 ```
+
+Use `requirements.txt` instead of `requirements-lock.txt` only when compatible
+newer package versions are acceptable. Use the locked file when you need output
+that matches the current validated workflow.
+
+`preflight_check.py` reports missing `Rscript` as a warning by default. Add
+`--require-rscript` when the R helper scripts are part of the planned run.
 
 Required for Excel `.xlsx` column-level audit:
 
@@ -52,16 +60,8 @@ No CRAN package installation is required for the bundled R scripts.
 
 Run this before a full Excel/PDF/image audit:
 
-```bash
-python - <<'PY'
-for m in ["pandas", "openpyxl", "fitz", "PIL", "cv2", "numpy"]:
-    try:
-        mod = __import__(m)
-        print(m, "OK", getattr(mod, "__version__", ""))
-    except Exception as exc:
-        print(m, "MISSING", type(exc).__name__, exc)
-PY
-Rscript --version
+```powershell
+py scripts/preflight_check.py --strict-versions --check-file-hashes
 ```
 
 Expected module names:
