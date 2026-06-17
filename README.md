@@ -1,9 +1,17 @@
 # paper-data-integrity-audit
 
-`paper-data-integrity-audit` is a Codex/Claude/OpenClaw-style skill for auditing
-scientific paper source data. It focuses on raw numeric data, figure source
-tables, decimal precision, digit distributions, pseudo-random or reconstructed
-values, statistical consistency, figure reproducibility, and PDF/image reuse.
+`paper-data-integrity-audit` is a Codex/Claude/OpenClaw-style skill for cautious,
+reproducible scientific paper data-integrity screening. It audits raw source
+workbooks, irregular Excel sheets, CSV/TSV tables, formulas, PDF figure files,
+embedded raster image objects, derived statistical claims, and visual evidence
+reports.
+
+The current standard workflow is versioned by
+[`resources/reproducibility_contract.json`](resources/reproducibility_contract.json).
+It provides a one-command full audit wrapper, fixed validation parameters,
+dependency preflight checks, source-data and PDF/image scanning, formula
+recalculation, and a browser-ready visual report with unlimited finding
+expansion by default.
 
 The skill is designed for cautious integrity screening. It should not be used to
 declare misconduct from internal inconsistencies alone. Reports should use
@@ -11,54 +19,127 @@ wording such as "high-risk inconsistency", "mathematically incompatible",
 "requires author clarification", and "cannot be reproduced from the provided raw
 data".
 
+## Latest Feature Highlights
+
+- Standard full-audit runner: `scripts/run_standard_audit.py` discovers source
+  workbooks and PDFs, stages inputs safely, runs the validated scanner set,
+  writes `audit_environment_manifest.json`, and builds the visual report.
+- Reproducibility guardrails: `requirements-lock.txt`,
+  `scripts/preflight_check.py`, and `resources/reproducibility_contract.json`
+  pin dependency versions, source-file hashes, current thresholds, and key
+  report behaviors.
+- Source workbook audit: workbook/sheet inventory, numeric-cell audit, decimal
+  precision normalization for binary floating-point display tails, digit
+  distribution summaries, repeated long decimals, formula cache validation,
+  duplicate sequences, scaled numeric vectors, duplicated same-sheet matrix
+  blocks, and same-sheet sliding-window arithmetic relations.
+- Window relation scanning: detects 3+ adjacent numeric windows that can be
+  related to other same-sheet windows through common arithmetic forms such as
+  `A+B`, `A-B`, `B-A`, `A*B`, `A/B`, `B/A`, `constant-B`, affine transforms,
+  fixed ratios, and composition-style fractions. The standard profile keeps
+  hit/window caps disabled and uses parallel workers where applicable.
+- PDF/image audit: extracts embedded raster image objects, records object
+  placement coordinates, checks byte-level duplicate images, perceptual near
+  matches, rendered-page similarity, and rendered local-region duplicate
+  candidates.
+- Visual evidence report: `scripts/build_visual_audit_report.py` creates
+  `visual_report.html`, Markdown summaries, exact-duplicate contact sheets,
+  complete highlighted HTML table evidence pages, sticky navigation, per-issue
+  table filtering, source/target role colors, normalized numeric display, and
+  image lightboxes with mouse-wheel zoom and drag-to-pan.
+- Reporting posture: all outputs are screening evidence only. Findings are
+  graded as review candidates such as `WARN_REVIEW` or `HIGH-RISK_REVIEW`, with
+  cautious language and enough source context for manual verification.
+
+## 中文简介
+
+`paper-data-integrity-audit` 是一个用于论文原始数据完整性初筛的 Codex/Claude/OpenClaw 技能。它不是用来直接判定学术不端，而是把 Excel 原始数据、CSV/TSV 表格、PDF 图像、嵌入图片对象、公式缓存和统计结果中值得人工复核的异常模式系统地扫出来，并生成可追溯的 CSV 和可视化 HTML 报告。
+
+最新版工作流的重点是“可复现”和“直观复核”：
+
+- 使用 `scripts/run_standard_audit.py` 一键运行标准全流程，自动发现原始数据 workbook 和 PDF，固定当前参数，并记录运行环境。
+- 使用 `requirements-lock.txt`、`scripts/preflight_check.py` 和 `resources/reproducibility_contract.json` 锁定依赖版本、关键源码哈希、阈值和报告行为，方便换电脑后复现同一套检查。
+- 原始数据扫描覆盖 workbook/sheet 清点、小数精度、长小数重复、末位数字分布、公式复核、短向量/整段数值复用、固定比例向量、重复矩阵块，以及同一 sheet 内 3 个及以上相邻数据窗口之间的基础运算关系。
+- PDF/图片扫描覆盖嵌入 raster image object 提取、`sha256` 精确重复、`dhash` 和 `ahash` 感知哈希近似匹配、整页渲染匹配和局部 tile 重复候选。
+- 可视化报告默认不截断候选项，完整渲染表格证据，对每个问题只高亮当前相关单元格，对 source/target 使用不同颜色，并支持图片点击放大、滚轮缩放和拖拽查看细节。
+
 ## What It Checks
 
-- Figure-to-data mapping: links each panel to source files, claimed `n`, groups,
-  plotted statistics, and main claims.
-- Decimal precision: mixed precision, 3+ place decimal tails, integer-like
-  values reported as arbitrary decimals, impossible percentages, and repeated
-  decimal tails.
+- Figure-to-data mapping: links panels to source files, claimed `n`, groups,
+  plotted statistics, and main claims when that context is available.
+- Workbook/sheet inventory: counts sheets, dimensions, numeric cells, formulas,
+  long decimals, and panel-like labels across irregular source workbooks.
+- Numeric-cell audit: records every numeric cell with address, displayed value,
+  decimal places, last digit, and binary-floating-tail presentation notes.
+- Decimal precision: mixed precision, 3+ place decimal tails, 8+ place long
+  decimals, integer-like values reported as arbitrary decimals, impossible
+  percentages, repeated exact values, and repeated decimal suffixes.
 - Digit distribution: last-digit counts, first-digit counts, digit entropy,
   terminal `0/5` enrichment, and Benford-style reference checks when appropriate.
 - Pseudo-random or reconstructed values: arithmetic progressions, monotonic
   replicate ordering, values centered on the mean, repeated terminal-digit
-  templates, suspiciously similar 3+ place decimals, reused short vectors, and
-  repeated local runs of 3 or more consecutive numeric positions.
+  templates, suspiciously similar long decimals, short vector reuse, complete
+  sequence reuse, and repeated local runs of 3 or more consecutive numeric
+  positions.
+- Numeric block reuse: duplicated same-sheet matrix blocks, short repeated
+  sequences, exact long-decimal repeats, and fixed-ratio/scaled numeric vectors.
+- Sliding-window arithmetic relations: candidate windows where 3+ adjacent
+  numeric values can be reproduced from other same-sheet windows through basic
+  arithmetic or affine/fractional transforms.
+- Constant-sum and mirror-pair screens: adjacent replicate pairs that repeatedly
+  satisfy fixed sums or complementary relationships.
 - Group-block statistics: `n`, mean, SD, SEM, CV, min/max, duplicate values,
-  decimal-place distribution, and raw values.
+  decimal-place distribution, digit distributions, arithmetic checks, and raw
+  values.
+- Formula validation: recalculates supported Excel formulas from cached workbook
+  values with tolerance `<=1e-9` and reports match/mismatch/unsupported status.
 - Derived-panel recalculation: AUC, percentage, ratio, fold change, normalized
-  signal, and composite-score checks from parent raw data.
+  signal, and composite-score checks from parent raw data when mappings are
+  available.
 - Statistical consistency: mean/SD/SEM, t tests, ANOVA, nonparametric tests,
   adjusted p values, and reported significance claims.
 - Figure reproduction: dot, bar, box, and basic summary plots from tidy raw data.
-- PDF/image integrity: embedded image reuse, exact hash duplicates, perceptual
-  near matches, repeated rendered-page regions, Western blot reuse, microscopy
-  reuse, splicing, and label mismatch candidates.
+- PDF/image integrity: embedded image reuse, exact byte-level hash duplicates,
+  perceptual near matches, repeated rendered-page regions, rendered local-region
+  duplicate candidates, Western blot reuse, microscopy reuse, splicing, and label
+  mismatch candidates.
+- Visual reporting: high-risk/WARN review summaries, source CSV links, complete
+  table evidence rendering, contact sheets, role-colored highlights, and
+  browser-friendly evidence navigation.
+
 
 ## Repository Layout
 
 ```text
 paper-data-integrity-audit/
-├── SKILL.md
-├── requirements.txt
-├── agents/
-│   └── openai.yaml
-├── resources/
-│   ├── decimal_rules.md
-│   ├── distribution_rules.md
-│   ├── environment_dependencies.md
-│   ├── raw_data_forensic_methods.md
-│   └── risk_grading.md
-├── scripts/
-│   ├── decimal_audit.py
-│   ├── distribution_audit.R
-│   ├── figure_reproduce.R
-│   ├── source_data_workbook_audit.py
-│   └── stat_recheck.R
-└── templates/
-    ├── audit_report.md
-    ├── figure_checklist.md
-    └── raw_data_checklist.md
+|-- SKILL.md
+|-- README.md
+|-- requirements.txt
+|-- requirements-lock.txt
+|-- agents/
+|   `-- openai.yaml
+|-- resources/
+|   |-- decimal_rules.md
+|   |-- distribution_rules.md
+|   |-- environment_dependencies.md
+|   |-- raw_data_forensic_methods.md
+|   |-- reproducibility_contract.json
+|   `-- risk_grading.md
+|-- scripts/
+|   |-- build_visual_audit_report.py
+|   |-- decimal_audit.py
+|   |-- distribution_audit.R
+|   |-- figure_reproduce.R
+|   |-- formula_recheck.py
+|   |-- pdf_image_integrity_scan.py
+|   |-- preflight_check.py
+|   |-- run_standard_audit.py
+|   |-- source_data_workbook_audit.py
+|   `-- stat_recheck.R
+`-- templates/
+    |-- audit_report.md
+    |-- figure_checklist.md
+    `-- raw_data_checklist.md
 ```
 
 ## Installation

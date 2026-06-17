@@ -1,6 +1,6 @@
 {
   "skill_name": "paper-data-integrity-audit",
-  "skill_version": "2026-06-16.4",
+  "skill_version": "2026-06-17.1",
   "profile_name": "standard_full_audit_current",
   "reference_platform": {
     "os": "Windows",
@@ -105,7 +105,7 @@
   },
   "file_hashes": {
     "SKILL.md": "3f19238adb56920fc4fd9416b67235c43c58a9e74930349d5c962fd2f4de20c6",
-    "README.md": "c5b6d5b17789fd1fd293a10c41c92f4dea8703571bfe585f0b3c0634abca1fde",
+    "README.md": "6fc9fc3c28ae71418d37f5d128276bb8daba73062583b6e643eeca8dc32878db",
     "requirements-lock.txt": "bd83d275fe18d76a4e2cd071384c7102ad74942c30d031aac9f0fb399ebeff8f",
     "resources/environment_dependencies.md": "137fc15c3cb0cb6ce0130ac1b3d4469ae543517bc32b0d23f04163e7c961dab3",
     "scripts/source_data_workbook_audit.py": "3685014b244a0d692de354362778efda64333e5c4e9a5fa5e419a91637a4a4be",
